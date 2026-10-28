@@ -1,115 +1,91 @@
-# Trabajo Práctico 08 - Endpoints persistentes de reservas de salas
+# Trabajo Práctico 09 - Actualización y eliminación de reservas de salas
 
 ## 1. Punto de partida y proyecto
-Este proyecto (copia denominada `tp-08-salas-http-mongodb`) evoluciona desde el TP07. Su objetivo principal es la migración definitiva de la persistencia: tanto la aplicación web HTML (vistas EJS) como la nueva API JSON comparten y consumen una única fuente de verdad asíncrona conectada a MongoDB Atlas, abandonando por completo el almacenamiento temporal en memoria. 
+Este proyecto (copia denominada `tp-09-salas-crud-mongodb`) es la continuación directa del TP08. Su objetivo principal es completar el ciclo CRUD (Crear, Leer, Actualizar, Borrar) en nuestra API RESTful, incorporando operaciones de actualización completa (`PUT`), actualización parcial (`PATCH`) y eliminación física (`DELETE`) sobre los documentos almacenados en MongoDB Atlas. Todo esto conviviendo con el sitio web HTML previamente construido.
 
 ## 2. Entorno y Versiones
 - **Node.js**: >= 22.13.0
-- **Base de Datos**: MongoDB Atlas, clúster gratuito Free (M0). Colección: `reservas`. Base: `reservas_salas_u8`.
+- **Base de Datos**: MongoDB Atlas, clúster gratuito Free (M0). Colección: `reservas`. Base: `reservas_salas_u9`.
 - **Dependencias principales**: Express 5.1.0, Mongoose 9.10.3.
 
 ## 3. Preparación, Instalación y Ejecución
-1. **Clonar e Instalar:**
-   ```bash
-   git clone <url-del-repo>
-   cd tp-08-salas-http-mongodb
-   npm install
-   ```
-2. **Preparar Clúster en Atlas:** Crear un clúster Free (M0). Configurar un usuario de base de datos con permisos de lectura y escritura. En *Network Access*, permitir tu dirección IP actual.
-3. **Entorno local:** Copiar el archivo `.env.example` y renombrarlo a `.env`. Reemplazar los marcadores `USUARIO`, `CLAVE` y `HOST` por las credenciales provistas por Atlas.
-4. **Ejecución del Servidor:**
-   Dado que ahora la aplicación exige las variables de entorno para arrancar, se debe ejecutar:
+1. **Instalación:** Ejecutar `npm install`.
+2. **Entorno Atlas y DNS:** Se configuró un clúster Free (M0) con usuario de base de datos e IP local permitida. Para sortear posibles bloqueos del ISP, el archivo `src/config/base-datos.js` impone el uso de resolutores DNS públicos (`8.8.8.8`, `1.1.1.1`).
+3. **Variables de Entorno:** Se provee un archivo `.env.example`. Debe copiarse como `.env` e inyectar las credenciales reales (`MONGODB_URI`).
+4. **Comando de Inicio:**
    ```bash
    node --env-file=.env src/index.js
    ```
-   *(También disponible mediante el script: `npm run start:local`)*
 
-## 4. Diagnóstico DNS y Comandos de Calidad
-- **Ajuste DNS:** Se implementó `dns.setServers(["8.8.8.8", "1.1.1.1"])` en `src/config/base-datos.js` para evitar fallos de resolución de registros SRV/TXT por bloqueos del proveedor de internet local.
-- **Resultados de herramientas de calidad:**
-  - `npm run format`: Ejecutado. Prettier unificó el formato en `src/` y `scripts/`.
-  - `npm run lint`: Ejecutado. ESLint no detectó variables sin uso ni errores de sintaxis en CommonJS.
-  - `npm run check`: Ejecutó con éxito ambas comprobaciones en pipeline.
-  - `npm start`: Falla a propósito si no se inyecta el `.env` (comportamiento seguro esperado).
-  - `node --env-file=.env src/index.js`: Arrancó conectando primero a MongoDB y luego abriendo el puerto 3000.
+## 4. Estructura por Capas (Arquitectura)
+- **`src/index.js` & `src/app.js`**: El arranque espera a MongoDB antes de escuchar el puerto. `app.js` monta los middlewares, el router API y el router HTML.
+- **`src/rutas/reservas-api.js`**: Define los endpoints de la API y orquesta los middlewares de validación específicos para cada método (`POST`, `PUT`, `PATCH`, `DELETE`).
+- **`src/middleware/`**: `reservas.js` valida la creación y `PUT`. `cambios-reservas.js` valida las reglas específicas del `PATCH`. `errores.js` atrapa rechazos y caídas asíncronas.
+- **`src/controladores/reservas.js`**: Actúa como intermediario, traduciendo peticiones HTTP a llamadas del servicio, e interpretando los retornos (ej: devolviendo `204` para borrados exitosos o `404` para nulos).
+- **`src/servicios/reservas-mongo.js`**: Única fuente de verdad. Ejecuta operaciones Mongoose (`findOneAndReplace`, `findOneAndUpdate`, `deleteOne`).
+- **`src/modelos/reserva.js`**: Esquema de Mongoose que dicta la forma y reglas a nivel de base de datos.
 
-## 5. Mapa de Archivos, Esquema, Modelo y Colección
-El proyecto mantiene una estructura modular estricta:
-- **`src/index.js`**: Espera la conexión a MongoDB antes de escuchar el puerto y controla el cierre ordenado (`SIGINT`/`SIGTERM`).
-- **`src/app.js`**: Monta el pipeline, la API JSON (`/api/reservas`) y el sitio HTML (`/reservas`).
-- **`src/rutas/reservas.js` y `src/rutas/reservas-api.js`**: Separa las rutas de la web HTML de la API JSON, ambas consumiendo el mismo controlador.
-- **`src/servicios/reservas-mongo.js`**: Única fuente de verdad. El antiguo servicio en memoria fue descartado del arranque para evitar dos fuentes activas.
-- **`src/modelos/reserva.js`**: Define el contrato exacto de los documentos (Schema) y provee la interfaz para interactuar con la colección `reservas` en MongoDB.
+## 5. Campos, Reglas y Eliminación
+- **Campos base**: `estudiante` (String, trim), `email` (String, match /@/), `sala` (enum), `fecha` (String, trim), `turno` (enum), `personas` (Number, 1-6).
+- **Campo `estado`**: Se agrega con valor `enum: ["pendiente", "confirmada"]`. El cliente no lo asigna en el POST inicial (MongoDB aplica `default: "pendiente"`).
+- **`PUT` (Reemplazo total)**: Exige el envío de los 7 campos mencionados.
+- **`PATCH` (Actualización parcial)**: Solo admite cambiar `personas` (validando tipos numéricos seguros) y/o `estado`. Se conservan intactos los demás campos.
+- **Diferencia conceptual (Estado vs DELETE)**: Cambiar el estado a "confirmada" (vía PUT/PATCH) es una actualización lógica del negocio que mantiene el documento vivo. Por otro lado, la operación `DELETE` ejecuta una **eliminación física**, removiendo el documento de la colección permanentemente de modo que un `GET` posterior devolverá `404`.
 
-## 6. Campos y Reglas del Dominio
-- `estudiante`: String, obligatorio, `trim: true`.
-- `email`: String, obligatorio, `trim: true`, `match: /@/`.
-- `sala`: String, obligatorio, `enum: ["Sala Norte", "Sala Sur", "Sala Multimedia"]`.
-- `fecha`: String, obligatorio, `trim: true`.
-- `turno`: String, obligatorio, `enum: ["Mañana", "Tarde", "Noche"]`.
-- `personas`: Number, obligatorio, `min: 1`, `max: 6`, `validate: Number.isInteger`.
-- `estado` *(Nuevo)*: String, asignado automáticamente por Mongoose. `default: "pendiente"`, `enum: ["pendiente", "confirmada"]`. El cliente no lo envía al crear.
-*(Límites: No se controlan lógicas de fechas pasadas, formato estricto de email ni control de superposición de reservas).*
+## 6. Contrato HTTP de la API (Endpoints)
+| Método | Endpoint | Resultado |
+| :--- | :--- | :--- |
+| `GET` | `/api/reservas` | 200 OK y arreglo de reservas. |
+| `POST` | `/api/reservas` | 201 Created, recurso guardado y cabecera `Location`. Default: `pendiente`. |
+| `GET` | `/api/reservas/:id` | 200 OK y recurso (o 404 si no existe). |
+| `PUT` | `/api/reservas/:id` | 200 OK. Reemplazo completo (exige los 7 campos editables). |
+| `PATCH` | `/api/reservas/:id` | 200 OK. Cambia solo `personas` y/o `estado`. |
+| `DELETE`| `/api/reservas/:id` | 204 No Content. Sin cuerpo si el documento fue eliminado. |
 
-## 7. Instrucciones para probar la API en Postman
-Con el servidor corriendo localmente (`node --env-file=.env src/index.js`), ejecutar las siguientes peticiones en Postman:
+*(Nota: Cualquier ID con formato inválido devuelve 400. Errores inesperados devuelven 500 JSON sin revelar la traza).*
 
-1. **Listar Reservas (GET):**
-   - **Método:** `GET` | **URL:** `http://localhost:3000/api/reservas` | **Body:** `none`
-   - **Respuesta:** 200 OK. Arreglo JSON con todas las reservas.
-2. **Crear Reserva (POST):**
-   - **Método:** `POST` | **URL:** `http://localhost:3000/api/reservas`
-   - **Headers:** `Content-Type: application/json`
-   - **Body (raw -> JSON):**
-     ```json
-     {
-       "estudiante": "Carlos Ejemplo",
-       "email": "carlos@ejemplo.com",
-       "sala": "Sala Norte",
-       "fecha": "2026-10-30",
-       "turno": "Mañana",
-       "personas": 2
-     }
-     ```
-   - **Respuesta:** 201 Created. Devuelve JSON de la reserva y la cabecera `Location` (ej: `/api/reservas/6734a...`).
-3. **Filtrar por Sala (GET):**
-   - **Método:** `GET` | **URL:** `http://localhost:3000/api/reservas?sala=Sala%20Norte`
-   - **Respuesta:** 200 OK. Arreglo JSON solo con las coincidencias exactas.
+## 7. Instrucciones para Postman
+1. **Crear Reserva:** `POST /api/reservas`. Enviar JSON con 6 campos base. Recibir `201` y copiar el `_id`.
+   ```json
+   {
+       "estudiante": "Ana Ejemplo", "email": "ana@example.com", "sala": "Sala Norte",
+       "fecha": "2026-10-28", "turno": "Mañana", "personas": 2
+   }
+   ```
+2. **Reemplazar (PUT):** `PUT /api/reservas/:id`. Enviar JSON con los 6 campos + `"estado": "confirmada"`.
+3. **Modificar Parcialmente (PATCH):** `PATCH /api/reservas/:id`. Enviar JSON con `{"personas": 3}` o `{"estado": "pendiente"}`.
+4. **Eliminar (DELETE):** `DELETE /api/reservas/:id`. Sin body. Devolverá `204`. Un GET posterior a ese ID dará `404`.
 
-## 8. Evidencia de Persistencia entre Procesos
-Para demostrar que los datos sobreviven al ciclo de vida de Node.js, se realizó el siguiente ensayo en Postman:
+## 8. Evidencia de Persistencia y Reinicio
+Para demostrar la persistencia física de las actualizaciones:
+1. Se actualizó la reserva de "Ana Ejemplo" mediante un `PATCH` estableciendo `personas: 4`.
+2. Se guardó el ID y se comprobó con `GET` individual que el cambio aplicó.
+3. Se eliminó una reserva diferente usando `DELETE` (verificado 204).
+4. **Reinicio:** Se detuvo el servidor (Ctrl+C) y se volvió a lanzar con el comando de entorno.
+5. **Comprobación:** Se hizo `GET` a la reserva de Ana: mantuvo `personas: 4`. Se hizo `GET` a la reserva borrada: continuó dando `404`.
+6. **Sitio HTML:** Se visitó `/reservas` en el navegador y los cambios se vieron reflejados en la grilla sin problemas, validando la continuidad de la web en memoria sobre Atlas.
 
-1. **Listado inicial (GET `/api/reservas`):** Cantidad inicial de reservas: `4`.
-2. **Creación (POST `/api/reservas`):** Se envió un JSON válido. El servidor respondió `201 Created` y asignó el ID: `6734abcd1234567890abcdef`. Cabecera `Location` recibida: `/api/reservas/6734abcd1234567890abcdef`.
-3. **Consulta del recurso (GET `Location`):** Se consultó la URL devuelta. Retornó los mismos datos y el default `estado: "pendiente"`. Cantidad total: `5`.
-4. **Reinicio:** Se detuvo el servidor Node.js (Ctrl+C) y se volvió a iniciar con `node --env-file=.env src/index.js`.
-5. **Comprobación tras reinicio:** Se volvió a enviar el GET al mismo ID (`6734abcd1234567890abcdef`). El documento se recuperó exitosamente desde Atlas.
-6. **Listado estable:** Se enviaron dos peticiones GET consecutivas a `/api/reservas`. Ambas retornaron exactamente `5` reservas, confirmando que la consulta no inserta datos.
-7. **Verificación en Atlas:** En Data Explorer se localizó el documento con el mismo `_id` en la colección `reservas`.
+## 9. Matriz Mínima de Pruebas y Resultados observados
+*(Las operaciones se ejecutaron sobre un listado estabilizado)*
 
-## 9. Matriz mínima de pruebas y resultados
-
-| Caso | Resultado Esperado | N Inicial | N Final | Resultado Observado / Evidencia |
+| Caso | Evidencia Esperada | N Inicial | N Final | Resultado Observado |
 | :--- | :--- | :--- | :--- | :--- |
-| **Listado vacío si la base es nueva** | 200, `[]` | 0 | 0 | (Asumiendo base limpia) 200 OK. Retorna arreglo vacío sin hacer inserciones. |
-| **Creación válida** | 201 y Location | 4 | 5 | 201 Created. Devuelve JSON con el recurso y cabecera `Location`. |
-| **Consulta por ID creado** | 200, mismo recurso | 5 | 5 | 200 OK. La petición GET al ID creado devuelve exactamente los mismos campos. |
-| **Consulta tras reiniciar** | 200, mismo ID | 5 | 5 | 200 OK. Tras detener y arrancar Node, devuelve el mismo documento de Mongo. |
-| **ID "1"** | 400 | 5 | 5 | 400 Bad Request. JSON advierte formato inválido. |
-| **ID válido inexistente** | 404 | 5 | 5 | 404 Not Found. JSON: `{"error": "Reserva no encontrada."}`. |
-| **Estudiante vacío o email sin @** | 400 | 5 | 5 | 400 Bad Request. La base se mantiene estable sin aumento. |
-| **Sala o turno no permitido** | 400 | 5 | 5 | 400 Bad Request. Falla validación enum, la base se mantiene estable. |
-| **Fecha vacía** | 400 | 5 | 5 | 400 Bad Request. Rechaza campo obligatorio. |
-| **Personas 0, 7, 2.5 o "abc"** | 400 | 5 | 5 | 400 Bad Request. Falla validación `min/max`, `isInteger` y conversión de tipos. BD intacta. |
-| **Personas true, arreglo u objeto** | 400 | 5 | 5 | 400 Bad Request. La conversión rechaza booleanos y objetos. BD intacta. |
-| **POST sin cuerpo o JSON mal formado** | 400 JSON | 5 | 5 | 400 Bad Request. BD intacta, cantidad sin aumento. |
-| **Campos extra estado o _id** | No los asigna | 5 | 6 | 201 Created. Ignora datos falsos, Mongo asigna nuevo `_id` y estado `pendiente`. |
-| **Filtro exacto por sala** | Coincidencias | 6 | 6 | 200 OK. Devuelve reservas de la sala, o `[]` si no hay uso. |
-| **Sala repetida como parámetro** | 400 | 6 | 6 | 400 Bad Request. Se rechazan arreglos en `req.query`. |
-| **Listar dos veces** | Cantidad estable | 6 | 6 | 200 OK. Dos consultas consecutivas devuelven 6 registros. |
-| **Formulario válido / inválido** | 302 / 400 | N/A | N/A | 302 Found tras crear, o 400 Bad Request renderizando formulario previo. |
-| **Estado y sitio** | Conteo y vistas | N/A | N/A | 200 OK. `/estado` llama a `countDocuments()`. |
-| **Fallo de arranque con URI ausente** | Falla | N/A | N/A | Código 1 en terminal. Captura el error antes de abrir el puerto. |
+| **POST válido** | 201, Location, estado pdte. | 4 | 5 | 201 Created. Mongoose asignó `estado: "pendiente"` y un `_id`. |
+| **PUT completo** | 200, mismo ID, 7 campos | 5 | 5 | 200 OK. Actualizó todos los campos y estado a "confirmada". |
+| **PUT incompleto** | 400 y recurso intacto | 5 | 5 | 400 Bad Request. Validador base rechazó por campo faltante. |
+| **PATCH personas o estado** | 200, omitidos conservados | 5 | 5 | 200 OK. Solo cambió el campo enviado; el resto no se alteró. |
+| **PATCH vacío, _id o $set** | 400 sin modificación | 5 | 5 | 400 Bad Request. Filtro estricto rechazó campos no permitidos. |
+| **personas 0, 7, 2.5, true, [], {}**| 400 sin modificación | 5 | 5 | 400 Bad Request. Validaciones combinadas de rango y tipo fallaron. |
+| **estado o enum inválido** | 400 sin modificación | 5 | 5 | 400 Bad Request. Validador restringió valores. |
+| **ID mal formado** | 400 | 5 | 5 | 400 Bad Request. Error "ID_INVALIDO" manejado en middleware. |
+| **ID válido ausente PUT/PATCH** | 404 sin creación | 5 | 5 | 404 Not Found. Evitado mediante opción `upsert: false`. |
+| **JSON mal formado o vacío**| 400 JSON | 5 | 5 | 400 Bad Request. `express.json()` falló el parseo. |
+| **DELETE existente** | 204; una reserva menos | 5 | 4 | 204 No Content. La colección devolvió un count restando la unidad. |
+| **Repetir DELETE / GET post**| 404 | 4 | 4 | 404 Not Found. El servicio devolvió false (deletedCount 0) / null. |
+| **Reinicio (Actualizar/Eliminar)**| Cambios persistidos | 4 | 4 | Las lecturas POST reinicio mantienen los cambios de la BD intactos. |
+| **Sitio, formulario, /estado** | Contratos conservados | 4 | 4 | Rutas operan normal. `/estado` indica Total de Reservas: 4. |
+| **Fallo inesperado (Simulado)** | 500 sin secretos | N/A | N/A | Simulación de caída forzada arrojó 500 JSON genérico sin stack. |
 
-## 10. Seguridad
-Se confirma que los archivos `.env`, credenciales, datos personales y carpetas de dependencias (`node_modules/`) no están presentes en el repositorio, al ser interceptados correctamente por el `.gitignore`.
+## 10. Calidad de Código y Seguridad
+- `.gitignore` intercepta dependencias y secretos locales.
+- Prettier y ESLint analizaron toda la base de código (`src/` y `scripts/`) sin reportar errores, garantizando consistencia semántica en CommonJS.
