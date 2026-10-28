@@ -10,7 +10,7 @@ function crearControladorReservas(servicioReservas) {
     });
   }
 
-  // --- Controladores HTML (Sitio Web) ---
+  // Controladores HTML (Sitio Web)
   async function listar(req, res) {
     const reservas = await servicioReservas.listar();
     res.render("reservas/lista", { titulo: "Salas reservadas", reservas });
@@ -45,7 +45,7 @@ function crearControladorReservas(servicioReservas) {
     res.redirect("/reservas");
   }
 
-  // --- Controladores JSON (API) ---
+  // Controladores JSON (API)
   async function listarApi(req, res) {
     const reservas = await servicioReservas.listar(req.query.sala);
     res.json(reservas);
@@ -65,6 +65,38 @@ function crearControladorReservas(servicioReservas) {
     res.location(`/api/reservas/${reserva.id}`).status(201).json(reserva);
   }
 
+  // NUEVOS CONTROLADORES TP09
+
+  async function eliminarApi(req, res) {
+    const eliminado = await servicioReservas.eliminar(req.params.id);
+    if (!eliminado) {
+      return res.status(404).json({ error: "Recurso no encontrado." });
+    }
+    res.status(204).end();
+  }
+
+  async function reemplazarApi(req, res) {
+    const reserva = await servicioReservas.reemplazar(
+      req.params.id,
+      req.cambiosValidos,
+    );
+    if (!reserva) {
+      return res.status(404).json({ error: "Recurso no encontrado." });
+    }
+    res.json(reserva);
+  }
+
+  async function actualizarApi(req, res) {
+    const reserva = await servicioReservas.actualizar(
+      req.params.id,
+      req.cambiosValidos,
+    );
+    if (!reserva) {
+      return res.status(404).json({ error: "Recurso no encontrado." });
+    }
+    res.json(reserva);
+  }
+
   return {
     estado,
     listar,
@@ -74,6 +106,9 @@ function crearControladorReservas(servicioReservas) {
     listarApi,
     obtenerApi,
     crearApi,
+    eliminarApi,
+    reemplazarApi,
+    actualizarApi,
   };
 }
 

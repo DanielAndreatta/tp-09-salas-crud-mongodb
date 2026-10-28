@@ -1,5 +1,9 @@
 const express = require("express");
 const { validarReserva } = require("../middleware/reservas");
+const {
+  validarReemplazoReserva,
+  validarActualizacionReserva,
+} = require("../middleware/cambios-reservas");
 
 function crearRouterReservasApi(controlador) {
   const router = express.Router();
@@ -7,6 +11,18 @@ function crearRouterReservasApi(controlador) {
   router.get("/", controlador.listarApi);
   router.get("/:id", controlador.obtenerApi);
   router.post("/", validarReserva, controlador.crearApi);
+
+  // NUEVAS RUTAS TP09
+  router.delete("/:id", controlador.eliminarApi);
+
+  router.put(
+    "/:id",
+    validarReserva,
+    validarReemplazoReserva,
+    controlador.reemplazarApi,
+  );
+
+  router.patch("/:id", validarActualizacionReserva, controlador.actualizarApi);
 
   return router;
 }

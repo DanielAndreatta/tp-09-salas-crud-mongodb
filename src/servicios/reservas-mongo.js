@@ -16,11 +16,11 @@ function representarReserva(documento) {
 
 // Validación del ObjectID
 function comprobarId(id) {
-    if (!mongoose.isObjectIdOrHexString(id)) {
-        const error = new Error("Identificador inválido");
-        error.codigo = "ID_INVALIDO";
-        throw error;
-    }
+  if (!mongoose.isObjectIdOrHexString(id)) {
+    const error = new Error("Identificador inválido");
+    error.codigo = "ID_INVALIDO";
+    throw error;
+  }
 }
 
 function crearServicioReservasMongo() {
