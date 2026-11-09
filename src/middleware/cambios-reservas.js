@@ -20,6 +20,11 @@ function validarReemplazoReserva(req, res, next) {
     }
   }
 
+  // NUEVO: Recortamos espacios si el estado es un texto antes de validarlo
+  if (typeof datos.estado === "string") {
+    datos.estado = datos.estado.trim();
+  }
+
   if (!estadosPermitidos.includes(datos.estado)) {
     return res
       .status(400)
@@ -81,6 +86,11 @@ function validarActualizacionReserva(req, res, next) {
   }
 
   if (datos.estado !== undefined) {
+    // NUEVO: Recortamos espacios si el estado es un texto antes de validarlo
+    if (typeof datos.estado === "string") {
+      datos.estado = datos.estado.trim();
+    }
+
     if (!estadosPermitidos.includes(datos.estado)) {
       return res
         .status(400)

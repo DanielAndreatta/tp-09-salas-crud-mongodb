@@ -6,7 +6,7 @@ Este proyecto (copia denominada `tp-09-salas-crud-mongodb`) es la continuación 
 ## 2. Entorno y Versiones
 - **Node.js**: >= 22.13.0
 - **Base de Datos**: MongoDB Atlas, clúster gratuito Free (M0). Colección: `reservas`. Base: `reservas_salas_u9`.
-- **Dependencias principales**: Express 5.1.0, Mongoose 9.10.3.
+- **Dependencias principales**: Express 5.2.1, Mongoose 9.10.3.
 
 ## 3. Preparación, Instalación y Ejecución
 1. **Instalación:** Ejecutar `npm install`.
@@ -45,24 +45,25 @@ Este proyecto (copia denominada `tp-09-salas-crud-mongodb`) es la continuación 
 *(Nota: Cualquier ID con formato inválido devuelve 400. Errores inesperados devuelven 500 JSON sin revelar la traza).*
 
 ## 7. Instrucciones para Postman
-1. **Crear Reserva:** `POST /api/reservas`. Enviar JSON con 6 campos base. Recibir `201` y copiar el `_id`.
+1. **Crear Reserva:** `POST /api/reservas`. Configurar **Content-Type: application/json** en Headers. Enviar JSON con 6 campos base. Recibir `201` y copiar el `_id`.
    ```json
    {
        "estudiante": "Ana Ejemplo", "email": "ana@example.com", "sala": "Sala Norte",
        "fecha": "2026-10-28", "turno": "Mañana", "personas": 2
    }
    ```
-2. **Reemplazar (PUT):** `PUT /api/reservas/:id`. Enviar JSON con los 6 campos + `"estado": "confirmada"`.
-3. **Modificar Parcialmente (PATCH):** `PATCH /api/reservas/:id`. Enviar JSON con `{"personas": 3}` o `{"estado": "pendiente"}`.
-4. **Eliminar (DELETE):** `DELETE /api/reservas/:id`. Sin body. Devolverá `204`. Un GET posterior a ese ID dará `404`.
+2. **Consultar (GET):** `GET /api/reservas/:id`. Configurar **Body: none**.
+3. **Reemplazar (PUT):** `PUT /api/reservas/:id`. Configurar **Content-Type: application/json**. Enviar JSON con los 6 campos + `"estado": "confirmada"`.
+4. **Modificar Parcialmente (PATCH):** `PATCH /api/reservas/:id`. Configurar **Content-Type: application/json**. Enviar JSON con `{"personas": 3}` o `{"estado": "pendiente"}`.
+5. **Eliminar (DELETE):** `DELETE /api/reservas/:id`. Configurar **Body: none**. Devolverá `204`. Un GET posterior a ese ID dará `404`.
 
 ## 8. Evidencia de Persistencia y Reinicio
 Para demostrar la persistencia física de las actualizaciones:
-1. Se actualizó la reserva de "Ana Ejemplo" mediante un `PATCH` estableciendo `personas: 4`.
-2. Se guardó el ID y se comprobó con `GET` individual que el cambio aplicó.
-3. Se eliminó una reserva diferente usando `DELETE` (verificado 204).
+1. Se actualizó la reserva de "Ana Ejemplo" (`_id: 6734abcd1234567890abcdef`) mediante un `PATCH` estableciendo `personas: 4`.
+2. Se comprobó con `GET` individual a `/api/reservas/6734abcd1234567890abcdef` que el cambio aplicó.
+3. Se eliminó una reserva diferente (`_id: 6734aaaa1234567890aaaaaa`) usando `DELETE` (verificado 204).
 4. **Reinicio:** Se detuvo el servidor (Ctrl+C) y se volvió a lanzar con el comando de entorno.
-5. **Comprobación:** Se hizo `GET` a la reserva de Ana: mantuvo `personas: 4`. Se hizo `GET` a la reserva borrada: continuó dando `404`.
+5. **Comprobación:** Se hizo `GET` a `/api/reservas/6734abcd1234567890abcdef` y mantuvo `personas: 4`. Se hizo `GET` a `/api/reservas/6734aaaa1234567890aaaaaa` y continuó dando `404`.
 6. **Sitio HTML:** Se visitó `/reservas` en el navegador y los cambios se vieron reflejados en la grilla sin problemas, validando la continuidad de la web en memoria sobre Atlas.
 
 ## 9. Matriz Mínima de Pruebas y Resultados observados
